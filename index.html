@@ -228,8 +228,11 @@ function nearestCity(x,z){let b=null,bd=1e9;for(const c of CITIES){const d=Math.
 const CITY_BOUND={minX:SEA_X-4,maxX:3150,minZ:-420,maxZ:1760};
 
 // ================= renderer / scene
-const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));
+// LITE = phones and tablets: fewer people, smaller pictures, lighter shadows, so the browser does not run out of memory
+const LITE=(()=>{try{const o=localStorage.getItem('liam_lite');if(o==='1')return true;if(o==='0')return false}catch(e){}const ua=navigator.userAgent||'';return /iPhone|iPad|iPod|Android|Mobile/i.test(ua)||((navigator.maxTouchPoints||0)>1&&/Macintosh/.test(ua))})();
+const NP=n=>LITE?Math.max(1,Math.round(n*.3)):n;
+const renderer=new THREE.WebGLRenderer({antialias:!LITE,powerPreference:'high-performance'});
+renderer.setPixelRatio(LITE?1:Math.min(devicePixelRatio||1,1.5));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
@@ -238,14 +241,14 @@ const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,1200);
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()});
 const MAXANI=Math.min(8,renderer.capabilities.getMaxAnisotropy?renderer.capabilities.getMaxAnisotropy():4);
-function canvasTex(w,h,draw,repeat){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');draw(g,w,h);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=MAXANI;if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping}return t}
+function canvasTex(w,h,draw,repeat){const sc=(LITE&&w*h>=32768)?.5:1;const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*sc));c.height=Math.max(1,Math.round(h*sc));const g=c.getContext('2d');if(sc!==1)g.scale(sc,sc);draw(g,w,h);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=MAXANI;if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping}return t}
 function speckle(g,w,h,n,dark,light){for(let i=0;i<n;i++){const d=Math.random()<.5;g.fillStyle=d?`rgba(0,0,0,${Math.random()*dark})`:`rgba(255,255,255,${Math.random()*light})`;g.fillRect(Math.random()*w,Math.random()*h,1+Math.random()*2,1+Math.random()*2)}}
 const lin=hex=>new THREE.Color(hex).convertSRGBToLinear();
 
 scene.background=canvasTex(4,256,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#2f6db8');gr.addColorStop(.5,'#7fb2e0');gr.addColorStop(.85,'#cfe2ee');gr.addColorStop(1,'#f0e9da');g.fillStyle=gr;g.fillRect(0,0,w,h)});
 scene.fog=new THREE.Fog(0xd5e3ec,110,340);
 const hemi=new THREE.HemisphereLight(0xcfe4ff,0xb69a74,.75);scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xffeccc,1.9);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+const sun=new THREE.DirectionalLight(0xffeccc,1.9);sun.castShadow=true;sun.shadow.mapSize.set(LITE?1024:2048,LITE?1024:2048);
 Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:10,far:300});sun.shadow.bias=-.0006;sun.shadow.normalBias=.02;
 scene.add(sun,sun.target);const SUN_OFF=new THREE.Vector3(70,120,45);
 
@@ -255,14 +258,15 @@ const VCMAT=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.75});
 
 // ---- geometry merging (buckets)
 function trs(x,y,z,rx=0,ry=0,rz=0,sx=1,sy,sz){const m=new THREE.Matrix4();m.compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(sx,sy??sx,sz??sx));return m}
-function mergeGeos(parts){let n=0;const gs=parts.map(p=>{const g=p.g.index?p.g.toNonIndexed():p.g.clone();g.applyMatrix4(p.m);n+=g.attributes.position.count;return g});
-  const pos=new Float32Array(n*3),nor=new Float32Array(n*3),uv=new Float32Array(n*2),col=new Float32Array(n*3);let o=0;
-  gs.forEach((g,i)=>{const p=parts[i],cnt=g.attributes.position.count;pos.set(g.attributes.position.array,o*3);nor.set(g.attributes.normal.array,o*3);
+function mergeGeos(parts){let nv=0,ni=0;const gs=parts.map(p=>{const g=p.g.clone();g.applyMatrix4(p.m);const c=g.attributes.position.count;nv+=c;ni+=g.index?g.index.count:c;return g});
+  const pos=new Float32Array(nv*3),nor=new Float32Array(nv*3),uv=new Float32Array(nv*2),col=new Float32Array(nv*3);const idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);let o=0,io=0;
+  gs.forEach((g,i)=>{const p=parts[i],cnt=g.attributes.position.count;pos.set(g.attributes.position.array,o*3);if(g.attributes.normal)nor.set(g.attributes.normal.array,o*3);
     const ua=g.attributes.uv?g.attributes.uv.array:null,su=p.uvScale?p.uvScale[0]:1,sv=p.uvScale?p.uvScale[1]:1,r=p.uvRect;
     for(let k=0;k<cnt;k++){let u=ua?ua[k*2]:0,v=ua?ua[k*2+1]:0;u*=su;v*=sv;if(r){u=r[0]+u*(r[2]-r[0]);v=r[1]+v*(r[3]-r[1])}uv[(o+k)*2]=u;uv[(o+k)*2+1]=v}
     const c=lin(p.color||'#ffffff');for(let k=0;k<cnt;k++){col[(o+k)*3]=c.r;col[(o+k)*3+1]=c.g;col[(o+k)*3+2]=c.b}
+    if(g.index){const a=g.index.array;for(let k=0;k<a.length;k++)idx[io+k]=a[k]+o;io+=a.length}else{for(let k=0;k<cnt;k++)idx[io+k]=o+k;io+=cnt}
     o+=cnt;g.dispose()});
-  const out=new THREE.BufferGeometry();out.setAttribute('position',new THREE.BufferAttribute(pos,3));out.setAttribute('normal',new THREE.BufferAttribute(nor,3));out.setAttribute('uv',new THREE.BufferAttribute(uv,2));out.setAttribute('color',new THREE.BufferAttribute(col,3));out.computeBoundingSphere();return out}
+  const out=new THREE.BufferGeometry();out.setAttribute('position',new THREE.BufferAttribute(pos,3));out.setAttribute('normal',new THREE.BufferAttribute(nor,3));out.setAttribute('uv',new THREE.BufferAttribute(uv,2));out.setAttribute('color',new THREE.BufferAttribute(col,3));out.setIndex(new THREE.BufferAttribute(idx,1));out.computeBoundingSphere();return out}
 const BUCKETS={};
 const CHUNK=300;function addPart(name,g,m,opts){const e=m.elements;const key=name+'#'+Math.floor(e[12]/CHUNK)+'_'+Math.floor(e[14]/CHUNK);(BUCKETS[key]||(BUCKETS[key]=[])).push(Object.assign({g,m},opts||{}))}
 function flushBucket(name,material,cast=true,receive=true){let first=null;for(const k of Object.keys(BUCKETS)){if(k.slice(0,k.lastIndexOf('#'))!==name)continue;const parts=BUCKETS[k];delete BUCKETS[k];if(!parts.length)continue;const mesh=new THREE.Mesh(mergeGeos(parts),material);mesh.name=k;mesh.castShadow=cast;mesh.receiveShadow=receive;scene.add(mesh);first=first||mesh}return first}
@@ -732,7 +736,7 @@ const BEACH_DIALOGUES=[
  ['תראה את הגלים היום','בוא נביא גלשן מחר בבוקר','רק אם אתה קם בשש','בשש? אני בקושי קם בעשר'],
 ];
 
-const G_LIMB=new THREE.CylinderGeometry(.5,.42,1,10),G_HEAD=new THREE.SphereGeometry(.5,16,12),G_LIMB_HQ=new THREE.CylinderGeometry(.5,.42,1,18),G_HEAD_HQ=new THREE.SphereGeometry(.5,28,20),G_SPH_HQ=new THREE.SphereGeometry(.5,16,12);
+const G_LIMB=new THREE.CylinderGeometry(.5,.42,1,10),G_HEAD=new THREE.SphereGeometry(.5,14,10),G_SPH_TINY=new THREE.SphereGeometry(.5,6,4),G_LIMB_HQ=new THREE.CylinderGeometry(.5,.42,1,18),G_HEAD_HQ=new THREE.SphereGeometry(.5,28,20),G_SPH_HQ=new THREE.SphereGeometry(.5,16,12);
 const EYES=['#3e2723','#4e342e','#1b5e20','#1565c0','#5d4037'];
 function shade(hex,k){const c=new THREE.Color(hex);c.multiplyScalar(k);return '#'+c.getHexString()}
 function makePerson(look){
@@ -740,7 +744,7 @@ function makePerson(look){
   const hq=!!look.hq;const LIMB=hq?G_LIMB_HQ:G_LIMB,HEAD=hq?G_HEAD_HQ:G_HEAD,SPH=hq?G_SPH_HQ:G_SPH;
   const g=new THREE.Group();const body=new THREE.Group();g.add(body);const meshes=[];
   const skin=look.skin,shirt=look.shirt,pants=look.pants,hair=look.hair,shoe=look.shoe||'#2a2a2a',eye=look.eye||'#3e2723';
-  const P=(geo,x,y,z,sx,sy,sz,color,rx=0,ry=0,rz=0)=>({g:geo,m:trs(x,y,z,rx,ry,rz,sx,sy,sz),color});
+  const P=(geo,x,y,z,sx,sy,sz,color,rx=0,ry=0,rz=0)=>({g:(geo===SPH&&Math.max(sx,sy,sz)<.07)?G_SPH_TINY:geo,m:trs(x,y,z,rx,ry,rz,sx,sy,sz),color});
   const mesh=(parts,parent)=>{const m=new THREE.Mesh(mergeGeos(parts),VCMAT);parent.add(m);meshes.push(m);return m};
   const legs=[],arms=[];const shorts=look.swim||look.shorts;const fem=look.female;const skinD=shade(skin,.88),shirtD=shade(shirt,.82);
   // legs: thigh, knee, calf, rounded shoe
@@ -960,14 +964,14 @@ function updateMatkot(dt){const me=focusPos();for(const m of matkot){if(m.a.stat
   const from=m.dir>0?m.a.pos:m.b.pos,to=m.dir>0?m.b.pos:m.a.pos;m.ball.position.set(from.x+(to.x-from.x)*m.t,1.4+Math.sin(m.t*Math.PI)*1.2,from.z+(to.z-from.z)*m.t)}}
 function streetGroups(c,n){for(let i=0;i<n;i++){const b=randomBlock(c);const s=rand(0,PER);perimPoint(c,b[0],b[1],s,tmpV);const cx=c.bx(b[0]),cz=c.bz(b[1]);const L=Math.max(1,Math.hypot(cx-tmpV.x,cz-tmpV.z));makeGroup(tmpV.x+(cx-tmpV.x)/L*1.3,tmpV.z+(cz-tmpV.z)/L*1.3,randi(2,3),DIALOGUES,'עומד עם חברים ברחוב ב'+c.name+' ומדבר')}}
 function populate(){
-  spawnWalkers(TA,190);
-  streetGroups(TA,16);for(const c of CITIES.slice(1))streetGroups(c,c.id==='jr'?6:4);
+  spawnWalkers(TA,NP(190));
+  streetGroups(TA,NP(16));for(const c of CITIES.slice(1))streetGroups(c,NP(c.id==='jr'?6:4));
   for(const c of CITIES)if(c.park){const cx=c.bx(c.park[0]),cz=c.bz(c.park[1]);makeGroup(cx-5,cz+6,3,DIALOGUES,'יושב בגן הציבורי ב'+c.name);makeGroup(cx+7,cz-7,2,DIALOGUES,'בגן הציבורי ב'+c.name)}
-  for(let i=0;i<36;i++){const p=new Person({state:'line',ctx:'מטייל בטיילת על חוף הים'});p.pos.set(rand(PROM_X0+2,PROM_X1-2),.2,rand(COAST_Z0+6,COAST_Z1-6));p.sdir=Math.random()<.5?1:-1}
-  for(const s of beachSpots.filter(s=>s.towel)){if(Math.random()<.4)continue;const p=new Person({state:'lie',ctx:'משתזף על מגבת בחוף',look:randomLook(Math.random()<.5,{swim:true})});p.pos.set(s.x,.06,s.z+.9);p.heading=0;p.fixed=true}
-  for(let i=0;i<9;i++){const s=pick(beachSpots);makeGroup(s.x+rand(-3,3),s.z+rand(3,6),randi(2,3),BEACH_DIALOGUES,'עומד בחוף עם חברים')}
-  for(let i=0;i<6;i++)makeMatkot(rand(SAND_X0+4,SAND_X0+10),rand(COAST_Z0+20,COAST_Z1-20));
-  for(let i=0;i<26;i++){const p=new Person({state:'swim',ctx:'שוחה בים',look:randomLook(Math.random()<.5,{swim:true})});p.pos.set(rand(SEA_X-30,SEA_X-6),-1,rand(COAST_Z0+10,COAST_Z1-10));p.heading=rand(0,TAU)}
+  for(let i=0;i<NP(36);i++){const p=new Person({state:'line',ctx:'מטייל בטיילת על חוף הים'});p.pos.set(rand(PROM_X0+2,PROM_X1-2),.2,rand(COAST_Z0+6,COAST_Z1-6));p.sdir=Math.random()<.5?1:-1}
+  for(const s of beachSpots.filter(s=>s.towel)){if(Math.random()<(LITE?.85:.4))continue;const p=new Person({state:'lie',ctx:'משתזף על מגבת בחוף',look:randomLook(Math.random()<.5,{swim:true})});p.pos.set(s.x,.06,s.z+.9);p.heading=0;p.fixed=true}
+  for(let i=0;i<NP(9);i++){const s=pick(beachSpots);makeGroup(s.x+rand(-3,3),s.z+rand(3,6),randi(2,3),BEACH_DIALOGUES,'עומד בחוף עם חברים')}
+  for(let i=0;i<NP(6);i++)makeMatkot(rand(SAND_X0+4,SAND_X0+10),rand(COAST_Z0+20,COAST_Z1-20));
+  for(let i=0;i<NP(26);i++){const p=new Person({state:'swim',ctx:'שוחה בים',look:randomLook(Math.random()<.5,{swim:true})});p.pos.set(rand(SEA_X-30,SEA_X-6),-1,rand(COAST_Z0+10,COAST_Z1-10));p.heading=rand(0,TAU)}
   for(const L of LIFEGUARDS){const p=new Person({state:'stand',ctx:'המציל של החוף, יושב ליד סוכת המציל',look:Object.assign(randomLook(false),{shirt:'#e53935',pants:'#e53935'})});p.name=pick(['שמוליק','אבנר']);p.job='מציל';p.pos.set(L.x-2.4,.02,L.z+1);p.heading=-Math.PI/2;p.fixed=true;L.p=p}
   // people praying at the Western Wall
   for(let i=0;i<16;i++){const north=i<10;const z=north?rand(KOTEL.z0+4,(KOTEL.z0+KOTEL.z1)/2-2):rand((KOTEL.z0+KOTEL.z1)/2+2,KOTEL.z1-4);const female=!north;
@@ -2261,14 +2265,14 @@ const STAD_LIGHT_MAT=new THREE.MeshStandardMaterial({color:0xffffff,emissive:lin
 
 // ---- park visitors
 const PARK_DIALOGUES=[['בוא נעלה על רכבת ההרים!','אני מפחד, היא נראית גבוהה מדי','אל תדאג, זה רק דקה','דקה של צרחות'],['איזה תור יש לגלגל הענק','שווה לחכות, רואים משם את כל העיר','גם את הים?','גם את הים'],['קנית כבר צמר גפן מתוק?','עוד לא, אחרי המכוניות המתנגשות','יאללה, אני מנצח אותך שם','נראה אותך']];
-for(const P of PARKS){for(let i=0;i<7;i++)makeGroup(rand(P.x0+15,P.x1-15),rand(P.z0+15,P.z1-15),randi(2,3),PARK_DIALOGUES,'מבקר ב'+P.name);for(let i=0;i<16;i++){const p=new Person({state:'stand',ctx:'מבקר ב'+P.name});p.pos.set(rand(P.x0+8,P.x1-8),.03,rand(P.z0+8,P.z1-8));p.heading=rand(0,TAU);p.fixed=true}}
+for(const P of PARKS){for(let i=0;i<NP(7);i++)makeGroup(rand(P.x0+15,P.x1-15),rand(P.z0+15,P.z1-15),randi(2,3),PARK_DIALOGUES,'מבקר ב'+P.name);for(let i=0;i<NP(16);i++){const p=new Person({state:'stand',ctx:'מבקר ב'+P.name});p.pos.set(rand(P.x0+8,P.x1-8),.03,rand(P.z0+8,P.z1-8));p.heading=rand(0,TAU);p.fixed=true}}
 
 // ---- Carmel market people
 const VENDOR_CALLS=['הכל בשקל! הכל בשקל!','שקל שקל שקל!','בוא בוא, תטעם, תטעם!','עגבניות בזול, רק היום!','תפוזים מתוקים כמו דבש!','אבטיח קר, אבטיח מתוק!','יאללה יאללה, שתיים בעשר!','הכי טרי בשוק, אחי!'];
 const ASK=['כמה זה עולה?','כמה הקילו?','זה טרי?','תעשה לי מחיר טוב'];
 MKT.vendors=[];MKT.shoppers=[];
 MKT.stalls.forEach((st,i)=>{if(i%2)return;const v=new Person({state:'vendor',female:Math.random()<.3,ctx:`מוכר ${st.good[0]} בשוק הכרמל, צועק ומוכר בזול`});v.job='מוכר בשוק';v.pos.set(st.x+st.side*1.2,.03,st.z);v.heading=st.side>0?-Math.PI/2:Math.PI/2;v.fixed=true;v.stall=st;v.callT=rand(2,12);MKT.vendors.push(v)});
-for(let i=0;i<46;i++){const p=new Person({state:'mkt',ctx:'קונה בשוק הכרמל'});p.pos.set(MKT.ax+rand(-4,4),.03,rand(MKT.z0+5,MKT.z1-5));p.sdir=Math.random()<.5?1:-1;p.lane=rand(-4.5,4.5);p.askT=rand(5,20);MKT.shoppers.push(p)}
+for(let i=0;i<NP(46);i++){const p=new Person({state:'mkt',ctx:'קונה בשוק הכרמל'});p.pos.set(MKT.ax+rand(-4,4),.03,rand(MKT.z0+5,MKT.z1-5));p.sdir=Math.random()<.5?1:-1;p.lane=rand(-4.5,4.5);p.askT=rand(5,20);MKT.shoppers.push(p)}
 function updateMarket(dt){const fp=focusPos();const near=Math.abs(fp.x-MKT.ax)<60&&fp.z>MKT.z0-40&&fp.z<MKT.z1+40;
   for(const p of MKT.shoppers){if(p.state!=='mkt')continue;if(p.stop>0){p.stop-=dt;continue}p.pos.z+=p.sdir*1.1*dt;p.pos.x=MKT.ax+p.lane;p.heading=p.sdir>0?0:Math.PI;if(p.pos.z>MKT.z1-4)p.sdir=-1;if(p.pos.z<MKT.z0+4)p.sdir=1;
     p.askT-=dt;if(p.askT<=0&&near){p.askT=rand(10,25);const v=MKT.vendors.reduce((b,v)=>Math.abs(v.pos.z-p.pos.z)<Math.abs(b.pos.z-p.pos.z)?v:b,MKT.vendors[0]);if(v&&Math.abs(v.pos.z-p.pos.z)<6&&v.state==='vendor'){p.stop=4;p.heading=v.stall.side>0?Math.PI/2:-Math.PI/2;const d=p.pos.distanceTo(fp);p.showBubble(pick(ASK));if(d<12)sayQueue(pick(ASK),p.voice,true);
@@ -2637,9 +2641,9 @@ syncHome();
 
 // ================= stage 3b: day/night, drive-by, jobs, radio, phone, save, graphics
 // ---- settings
-const SET={q:1,shadows:true,view:1,time:'auto',daySpeed:1,fps:false,lamps:true};
+const SET={q:LITE?0:1,shadows:!LITE,view:LITE?0:1,time:'auto',daySpeed:1,fps:false,lamps:true};
 const VIEW={ppl:150,car:200};
-function applySettings(){renderer.setPixelRatio(Math.min(devicePixelRatio||1,[1,1.25,1.5][SET.q]));renderer.setSize(innerWidth,innerHeight);
+function applySettings(){if(LITE&&!SET._lite){SET._lite=1;SET.q=0;SET.view=0;SET.shadows=false}renderer.setPixelRatio(Math.min(devicePixelRatio||1,[1,1.25,1.5][SET.q]));renderer.setSize(innerWidth,innerHeight);
   sun.castShadow=SET.shadows;renderer.shadowMap.enabled=SET.shadows;scene.traverse(o=>{if(o.material&&o.material.needsUpdate!==undefined){if(Array.isArray(o.material))o.material.forEach(m=>m.needsUpdate=true);else o.material.needsUpdate=true}});
   const far=[230,340,480][SET.view];scene.fog.far=far;scene.fog.near=far*.33;VIEW.ppl=[100,150,190][SET.view];VIEW.car=[150,200,280][SET.view];camera.far=far+120;camera.updateProjectionMatrix();
   $('fpsbox').hidden=!SET.fps}
@@ -2930,8 +2934,8 @@ function buyLunaStall(s){if(G.money<s.price){toast('אין לך מספיק כס�
   if(s.name==='מטווח פרסים'){gunSound(WEAPONS[0],.4);setTimeout(()=>{if(Math.random()<.45){const pz=pick(PRIZES);addInv(pz);personSay(s.p,`פגיעה! זכית ב${pz}!`,true);toast(`זכית ב${pz}! (בתיק)`,2600)}else{personSay(s.p,'כמעט! עוד ניסיון?',true);toast('פספסת... נסה שוב',1800)}},500);return}
   G.health=Math.min(100,G.health+s.hp);personSay(s.p,pick(['בתיאבון!','תהנה!','בבקשה, מותק!']),true);toast(`${s.name}! +${s.hp} בריאות`,2000);blip(880,.08,.1)}
 {const A={x0:LUNA.x0+10,x1:LUNA.x1-10,z0:LUNA.z0+10,z1:LUNA.z1-10};
- for(let i=0;i<46;i++){const kid=Math.random()<.3;const p=new Person({state:'stroll',female:Math.random()<.5,ctx:kid?'ילד שמבקר בלונה פארק עם ההורים':'מבקר בלונה פארק, נהנה מהמתקנים'});if(kid){p.look.scale=rand(.62,.75);p.rebuildScale=true;p.group.scale.setScalar(p.look.scale);p.age=randi(6,12);p.job='ילד'}p.area=A;p.pos.set(rand(A.x0,A.x1),.03,rand(A.z0,A.z1));p.heading=rand(0,TAU)}
- for(let i=0;i<8;i++)makeGroup(rand(-60,60),rand(LUNA.z1-150,LUNA.z1-30),randi(2,3),PARK_DIALOGUES,'מבקר בלונה פארק')}
+ for(let i=0;i<NP(46);i++){const kid=Math.random()<.3;const p=new Person({state:'stroll',female:Math.random()<.5,ctx:kid?'ילד שמבקר בלונה פארק עם ההורים':'מבקר בלונה פארק, נהנה מהמתקנים'});if(kid){p.look.scale=rand(.62,.75);p.rebuildScale=true;p.group.scale.setScalar(p.look.scale);p.age=randi(6,12);p.job='ילד'}p.area=A;p.pos.set(rand(A.x0,A.x1),.03,rand(A.z0,A.z1));p.heading=rand(0,TAU)}
+ for(let i=0;i<NP(8);i++)makeGroup(rand(-60,60),rand(LUNA.z1-150,LUNA.z1-30),randi(2,3),PARK_DIALOGUES,'מבקר בלונה פארק')}
 function updateLuna(dt){const p=player();const fp=focusPos();
   if(!G.inCar&&!G.ride&&!G.inside&&!G.lunaPass&&inRect(p.pos,LUNA,-.5)){p.pos.set(LUNA.gate.x,.03,LUNA.z1+3.5);p.heading=0;camPos.set(p.pos.x,3,p.pos.z-6);toast('צריך כרטיס כניסה – הקופות ליד השער',2600)}
   const near=!G.inside&&!G.inCar&&inRect(fp,LUNA,35);if(near&&!LUNA.music){LUNA.music=true;tuneStart('luna')}else if(!near&&LUNA.music){LUNA.music=false;tuneStop()}
@@ -3469,7 +3473,7 @@ function drawEilatInset(g,X,Z){const ix0=X(2050),iz0=Z(1060),S=.75,W=900*S,Hh=82
 {if(PALMS5.length){const trunkG=new THREE.CylinderGeometry(.18,.28,7,7);trunkG.translate(0,3.5,0);const fr=[];for(let k=0;k<9;k++)fr.push({g:new THREE.BoxGeometry(.55,.05,3.2),m:new THREE.Matrix4().makeRotationY(k*TAU/9).multiply(new THREE.Matrix4().makeTranslation(0,0,1.5)).multiply(new THREE.Matrix4().makeRotationX(.45))});const crownG=mergeGeos(fr);crownG.translate(0,7,0);
   const tr=new THREE.InstancedMesh(trunkG,mat('#8a6a46'),PALMS5.length),cr=new THREE.InstancedMesh(crownG,new THREE.MeshStandardMaterial({color:lin('#3f7a2e'),side:THREE.DoubleSide,roughness:.8}),PALMS5.length);
   PALMS5.forEach(([x,z],i)=>{const s=rand(.85,1.25),ry=rand(0,TAU);tr.setMatrixAt(i,trs(x,.05,z,0,ry,0,s));cr.setMatrixAt(i,trs(x,.05,z,0,ry,0,s))});scene.add(tr,cr);for(const [x,z] of PALMS5)addObst(x,z,.32)}
- spawnWalkers(EI,70);streetGroups(EI,6);
+ spawnWalkers(EI,NP(70));streetGroups(EI,NP(6));
  FACADES.forEach((m,i)=>flushBucket('fac'+i,m));flushBucket('roof',ROOFMAT,false,true);flushBucket('glass',new THREE.MeshStandardMaterial({color:lin('#8fb4c8'),roughness:.08,metalness:.4,emissive:lin('#1d2c33')}),false,false);
  flushBucket('awning',VCMAT,true,true);flushBucket('misc',VCMAT,true,true);flushBucket('rtile',VCMAT,true,true);flushBucket('x_fac2',VCMAT,true,true);flushBucket('x_pave',new THREE.MeshStandardMaterial({map:T.paving,color:lin('#e2cfae'),roughness:.9}),false,true);
  {const m=new THREE.MeshStandardMaterial({map:T.asphalt,roughness:.92});flushBucket('hroad',m,false,true)}flushBucket('cdash',new THREE.MeshBasicMaterial({map:T.dashV,transparent:true,depthWrite:false}),false,false);flushBucket('hline',new THREE.MeshBasicMaterial({vertexColors:true}),false,false);
