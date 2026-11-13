@@ -185,7 +185,7 @@ body.touch.portrait #rotate{display:grid;position:fixed;inset:0;z-index:30;place
 </div>
 <div id="err" hidden></div>
 <div id="joy"><div id="joyk"></div></div>
-<div id="tbtns"><button class="tb blue" data-k="KeyM">מפה</button><button class="tb blue" data-k="KeyP">טלפון</button><button class="tb blue" data-k="KeyI">תיק</button><button class="tb" data-k="KeyT" id="tbT">T<small>לדבר</small></button><button class="tb" data-k="KeyF" id="tbF">F<small>רכב</small></button><button class="tb" data-k="KeyE">E<small>פעולה</small></button><button class="tb" data-act="weapon" id="tbW">נשק</button><button class="tb" data-act="brake" id="tbBrake">בלם</button><button class="tb fire" data-act="fire" id="tbFire">ירי</button></div>
+<div id="tbtns"><button class="tb blue" data-k="KeyM">מפה</button><button class="tb blue" data-k="KeyP">טלפון</button><button class="tb blue" data-k="KeyI">תיק</button><button class="tb blue" data-k="KeyT" id="tbT">לדבר</button><button class="tb blue" data-k="KeyF" id="tbF">רכב</button><button class="tb blue" data-k="KeyE">פעולה</button><button class="tb" data-act="weapon" id="tbW">נשק</button><button class="tb" data-act="brake" id="tbBrake">בלם</button><button class="tb fire" data-act="fire" id="tbFire">ירי</button></div>
 <div id="ttop"><button class="tt" data-k="KeyV">מצלמה</button><button class="tt" data-k="KeyJ" id="ttJ">עבודה</button><button class="tt" data-k="KeyQ" id="ttQ">רדיו</button><button class="tt" data-k="KeyR" id="ttR">חזרה לדמות</button><button class="tt" data-k="KeyH">עזרה</button><button class="tt" data-k="KeyG" id="ttG" hidden>המראה</button><button class="tt" data-k="KeyK" id="ttK" hidden>הודעה לחברים</button><button class="tt" data-act="full" id="ttFull" hidden>מסך מלא</button></div>
 <div id="rotate">סובב את הטלפון לרוחב כדי לשחק</div>
 
@@ -2909,7 +2909,7 @@ function enableTouch(){if(touchOn)return;touchOn=true;document.body.classList.ad
     const fly=car&&G.inCar.type==='flyer';$('ttG').hidden=!fly;if(fly)$('ttG').textContent=G.inCar.flying?'נחיתה':'המראה';$('ttK').hidden=!(window.ONL&&ONL.user&&Object.keys(ONL.friends||{}).some(f=>ONL.status[f]));
     $('ttFull').hidden=!(document.fullscreenEnabled||document.webkitFullscreenEnabled)||!!(document.fullscreenElement||document.webkitFullscreenElement);
     $('tbBrake').innerHTML=fly?'עלייה':'בלם';
-    $('tbFire').innerHTML=fly?'ירידה':car?'ירי<small>מהחלון</small>':'ירי';$('tbW').innerHTML=`${WEAPONS[G.weapon].name.split(' ')[0]}<small>החלף נשק</small>`;$('tbF').innerHTML=car?'F<small>לצאת</small>':'F<small>רכב</small>'},250)}
+    $('tbFire').innerHTML=fly?'ירידה':car?'ירי<small>מהחלון</small>':'ירי';$('tbW').innerHTML=`${WEAPONS[G.weapon].name.split(' ')[0]}<small>החלף נשק</small>`;$('tbF').innerHTML=car?'לצאת<small>מהרכב</small>':'רכב'},250)}
 if(TOUCH)enableTouch();
 // ---- phones: show button names instead of computer keys, and help to play in full screen
 const KEY_WORDS={E:'פעולה',F:'רכב',T:'לדבר',Y:'כן',N:'לא',R:'חזרה לדמות',M:'מפה',P:'טלפון',I:'תיק',J:'עבודה',Q:'רדיו',V:'מצלמה',H:'עזרה',G:'המראה',X:'ירי',K:'הודעה',C:'מחיקה',Backspace:'סגור',Enter:'אישור','רווח':'ירי',Space:'ירי',Shift:'ריצה'};
