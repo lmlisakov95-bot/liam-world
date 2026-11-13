@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="העולם של ליאם"><meta name="theme-color" content="#0b0f18"><link rel="manifest" href="manifest.json"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>העולם של ליאם איסקוב</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&family=Secular+One&display=swap">
@@ -186,7 +186,7 @@ body.touch.portrait #rotate{display:grid;position:fixed;inset:0;z-index:30;place
 <div id="err" hidden></div>
 <div id="joy"><div id="joyk"></div></div>
 <div id="tbtns"><button class="tb blue" data-k="KeyM">מפה</button><button class="tb blue" data-k="KeyP">טלפון</button><button class="tb blue" data-k="KeyI">תיק</button><button class="tb" data-k="KeyT" id="tbT">T<small>לדבר</small></button><button class="tb" data-k="KeyF" id="tbF">F<small>רכב</small></button><button class="tb" data-k="KeyE">E<small>פעולה</small></button><button class="tb" data-act="weapon" id="tbW">נשק</button><button class="tb" data-act="brake" id="tbBrake">בלם</button><button class="tb fire" data-act="fire" id="tbFire">ירי</button></div>
-<div id="ttop"><button class="tt" data-k="KeyV">מצלמה</button><button class="tt" data-k="KeyJ" id="ttJ">עבודה</button><button class="tt" data-k="KeyQ" id="ttQ">רדיו</button><button class="tt" data-k="KeyR" id="ttR">חזרה לדמות</button><button class="tt" data-k="KeyH">עזרה</button></div>
+<div id="ttop"><button class="tt" data-k="KeyV">מצלמה</button><button class="tt" data-k="KeyJ" id="ttJ">עבודה</button><button class="tt" data-k="KeyQ" id="ttQ">רדיו</button><button class="tt" data-k="KeyR" id="ttR">חזרה לדמות</button><button class="tt" data-k="KeyH">עזרה</button><button class="tt" data-k="KeyG" id="ttG" hidden>המראה</button><button class="tt" data-k="KeyK" id="ttK" hidden>הודעה לחברים</button><button class="tt" data-act="full" id="ttFull" hidden>מסך מלא</button></div>
 <div id="rotate">סובב את הטלפון לרוחב כדי לשחק</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2879,7 +2879,7 @@ function kbdCode(t){t=(t||'').trim();if(/^\d$/.test(t))return 'Digit'+t;if(/^[A-
 function tapKey(code){audio();if(!G.started){startGame();return}if(G.chat||G.note)return;keys[code]=true;onKeyPress(code);setTimeout(()=>{keys[code]=false},150)}
 // tap on any key label inside menus / hints = press that key (works with a mouse too)
 let tapStart=null;document.addEventListener('pointerdown',e=>{tapStart={x:e.clientX,y:e.clientY,t:performance.now()}},true);
-document.addEventListener('pointerup',e=>{if(!tapStart||Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)>18)return;if(e.target.closest('input,button'))return;
+document.addEventListener('pointerup',e=>{if(!tapStart||Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)>18)return;if(e.target.closest('input,button,textarea,select'))return;{const fr=e.target.closest('[data-fr]');if(fr){if(window.onlFrAct)onlFrAct(fr);return}}
   if(e.target.id==='bigmap'){tapKey('KeyM');return}{const dk=e.target.closest('#inv [data-key]');if(dk){$('inv').hidden=true;tapKey(dk.dataset.key);return}}const help=e.target.closest('#help,#inv');if(help){help.hidden=true;return}
   const host=e.target.closest('#xpanel,#remote,#prompt,#hint');if(!host)return;let code=null;const dk=e.target.closest('[data-key]');if(dk)code=dk.dataset.key;
   if(!code){const kb=e.target.closest('kbd')||(e.target.closest('.row,.prow,.papp,.app')||host).querySelector('kbd');if(kb)code=kbdCode(kb.textContent)}if(code)tapKey(code)});
@@ -2898,15 +2898,32 @@ function enableTouch(){if(touchOn)return;touchOn=true;document.body.classList.ad
   for(const b of document.querySelectorAll('#tbtns .tb,#ttop .tt')){b.addEventListener('contextmenu',e=>e.preventDefault());
     b.addEventListener('pointerdown',e=>{e.preventDefault();audio();try{b.setPointerCapture(e.pointerId)}catch(_){}b.classList.add('on');const a=b.dataset.act;
       if(!G.started){startGame();return}if(G.chat||G.note)return;
-      if(a==='fire'){if(G.panel){return}if(G.inCar){keys.KeyX=true;b.dataset.held='KeyX'}else{keys.Space=true;b.dataset.held='Space';onKeyPress('Space')}return}
+      if(a==='full'){goFull();try{screen.orientation.lock('landscape').catch(()=>{})}catch(_){}return}
+      if(a==='fire'){if(G.panel){return}if(G.inCar&&G.inCar.type==='flyer'){keys.ShiftLeft=true;b.dataset.held='ShiftLeft';return}if(G.inCar){keys.KeyX=true;b.dataset.held='KeyX'}else{keys.Space=true;b.dataset.held='Space';onKeyPress('Space')}return}
       if(a==='brake'){keys.Space=true;b.dataset.held='Space';return}
       if(a==='weapon'){let i=G.weapon;for(let k=0;k<8;k++){i=(i+1)%8;if(G.owned[i])break}equip(i);blip(600,.06,.1,'square');return}
       tapKey(b.dataset.k)});
     const up=e=>{b.classList.remove('on');if(b.dataset.held){keys[b.dataset.held]=false;b.dataset.held=''}};b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up)}
   // context: which buttons make sense right now
   setInterval(()=>{if(!G.started)return;const car=!!G.inCar;$('tbBrake').hidden=!car;$('tbT').hidden=car||!!G.ride;$('ttJ').hidden=!car;$('ttQ').hidden=!car;$('ttR').hidden=player()===G.origPerson;
-    $('tbFire').innerHTML=car?'ירי<small>מהחלון</small>':'ירי';$('tbW').innerHTML=`${WEAPONS[G.weapon].name.split(' ')[0]}<small>החלף נשק</small>`;$('tbF').innerHTML=car?'F<small>לצאת</small>':'F<small>רכב</small>'},250)}
+    const fly=car&&G.inCar.type==='flyer';$('ttG').hidden=!fly;if(fly)$('ttG').textContent=G.inCar.flying?'נחיתה':'המראה';$('ttK').hidden=!(window.ONL&&ONL.user&&Object.keys(ONL.friends||{}).some(f=>ONL.status[f]));
+    $('ttFull').hidden=!(document.fullscreenEnabled||document.webkitFullscreenEnabled)||!!(document.fullscreenElement||document.webkitFullscreenElement);
+    $('tbBrake').innerHTML=fly?'עלייה':'בלם';
+    $('tbFire').innerHTML=fly?'ירידה':car?'ירי<small>מהחלון</small>':'ירי';$('tbW').innerHTML=`${WEAPONS[G.weapon].name.split(' ')[0]}<small>החלף נשק</small>`;$('tbF').innerHTML=car?'F<small>לצאת</small>':'F<small>רכב</small>'},250)}
 if(TOUCH)enableTouch();
+// ---- phones: show button names instead of computer keys, and help to play in full screen
+const KEY_WORDS={E:'פעולה',F:'רכב',T:'לדבר',Y:'כן',N:'לא',R:'חזרה לדמות',M:'מפה',P:'טלפון',I:'תיק',J:'עבודה',Q:'רדיו',V:'מצלמה',H:'עזרה',G:'המראה',X:'ירי',K:'הודעה',C:'מחיקה',Backspace:'סגור',Enter:'אישור','רווח':'ירי',Space:'ירי',Shift:'ריצה'};
+function touchKeys(root){if(!touchOn)return;for(const k of root.querySelectorAll('kbd:not([data-tl])')){const t=k.textContent.trim();k.dataset.tl=1;const code=kbdCode(t);if(code&&!k.dataset.key)k.dataset.key=code;if(KEY_WORDS[t])k.textContent=KEY_WORDS[t]}}
+if(TOUCH){const mo=new MutationObserver(()=>{for(const id of ['hint','prompt','xpanel','remote','help','inv','start','mission'])if($(id))touchKeys($(id))});
+  for(const id of ['hint','prompt','xpanel','remote','help','inv','start','mission'])if($(id)){mo.observe($(id),{childList:true,subtree:true,characterData:true});touchKeys($(id))}}
+// iPhone/iPad Safari cannot hide the address bar from a web page; adding the game to the home screen opens it full screen like an app
+setTimeout(function(){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||((navigator.maxTouchPoints||0)>1&&/Macintosh/.test(navigator.userAgent));
+  const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches;
+  if(!ios||standalone||!onlSite())return;let seen=0;try{seen=+localStorage.getItem('liam_a2hs')||0}catch(e){}if(seen>=3)return;try{localStorage.setItem('liam_a2hs',seen+1)}catch(e){}
+  const d=document.createElement('div');d.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:70;width:min(440px,92vw);background:rgba(10,14,22,.95);border:2px solid #3d7eff;border-radius:14px;padding:12px 14px;color:#fff;direction:rtl;font:15px Heebo,Arial;text-align:center';
+  d.innerHTML='<b style="font-size:17px">רוצים מסך מלא באייפון?</b><br>לוחצים בספארי על כפתור השיתוף <span style="font-size:20px">⬆︎</span> ואז על <b>"הוספה למסך הבית"</b>.<br>מעכשיו פותחים את המשחק מהאייקון במסך הבית, והוא נפתח במסך מלא כמו אפליקציה.<div style="margin-top:8px"><span id="a2hsX" style="background:#3d7eff;padding:5px 16px;border-radius:8px;cursor:pointer">הבנתי</span></div>';
+  document.body.appendChild(d);const close=()=>d.remove();d.addEventListener('pointerup',e=>{e.stopPropagation();close()});setTimeout(close,20000)},1200);
+
 addEventListener('keydown',e=>{if(e.code==='F4'&&e.ctrlKey&&e.shiftKey){e.preventDefault();enableTouch()}});
 
 // ================= stage 4: solid poles/people, police witnesses, Luna Park logic, playing the derby, Kotel security, Maccabi buses + signs
@@ -4974,9 +4991,11 @@ function onlFriendsUI(){if(!ONL.user){toast('משחק עם חברים עובד �
    ${ONL.admin?onlAdminHTML(btn):''}
    <div class="row"><span>${btn('יציאה מהחשבון','out','','#5d2525')}</span></div><div class="foot"><kbd>Backspace</kbd> לסגור · <kbd>K</kbd> הודעה מהירה לחברים</div>`);
   const inp=$('onlAdd');if(inp)for(const ev of ['keydown','keyup'])inp.addEventListener(ev,e=>{e.stopPropagation();if(ev==='keydown'&&e.key==='Enter')onlAddFriend(inp.value)})}
-$('xpanel').addEventListener('click',e=>{const b=e.target.closest('[data-fr]');if(!b)return;e.stopPropagation();const id=b.dataset.id,a=b.dataset.fr;
+$('xpanel').addEventListener('click',e=>{const b=e.target.closest('[data-fr]');if(!b)return;e.stopPropagation();onlFrAct(b)},true);
+function onlFrAct(b){const now=performance.now();if(now-(ONL.frT||0)<600)return;ONL.frT=now;const id=b.dataset.id,a=b.dataset.fr;
   if(a==='add')onlAddFriend(($('onlAdd')||{}).value);else if(a==='addn')onlAddFriend(b.dataset.n);else if(a==='acc')onlAccept(id);else if(a==='dec')onlDecline(id);else if(a==='inv')onlInvite(id);else if(a==='jump')onlJump(id);
-  else if(a==='rm'){if(confirm(`להסיר את ${ONL.friends[id]&&ONL.friends[id].name} מהחברים?`))onlRemove(id)}else if(a==='out'){if(confirm('לצאת מהחשבון?')){saveGame(true);firebase.auth().signOut().then(()=>location.reload())}}},true);
+  else if(a==='rm'){if(confirm(`להסיר את ${ONL.friends[id]&&ONL.friends[id].name} מהחברים?`))onlRemove(id)}else if(a==='out'){if(confirm('לצאת מהחשבון?')){saveGame(true);firebase.auth().signOut().then(()=>location.reload())}}}
+window.onlFrAct=onlFrAct;
 function onlBadgeName(){}
 // ---- the manager (admin) account and moving an old save from the Claude version into an account
 const ADMIN_NAME='ליאם איסקוב';
