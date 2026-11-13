@@ -4919,18 +4919,19 @@ function onlLoginUI(show,msg){let d=$('onlLogin');if(!d){d=document.createElemen
     $('onlIn').onclick=()=>onlSignIn(false);$('onlNew').onclick=()=>onlSignIn(true)}
   d.hidden=!show;if(msg!==undefined)$('onlMsg').textContent=msg}
 const ONL_ERR={'auth/invalid-credential':'שם המשתמש או הסיסמה לא נכונים','auth/wrong-password':'הסיסמה לא נכונה','auth/user-not-found':'אין משתמש כזה – לחץ "משתמש חדש"','auth/email-already-in-use':'השם הזה כבר תפוס, בחר שם אחר','auth/weak-password':'הסיסמה קצרה מדי – לפחות 6 תווים','auth/network-request-failed':'אין חיבור לאינטרנט','auth/too-many-requests':'יותר מדי ניסיונות, נסה שוב עוד דקה'};
-async function onlSignIn(isNew){const n=$('onlName').value.trim(),p=$('onlPass').value;if(n.length<2){onlLoginUI(true,'שם משתמש של לפחות 2 אותיות');return}if(p.length<6){onlLoginUI(true,'סיסמה של לפחות 6 תווים');return}
+async function onlSignIn(isNew){const n=$('onlName').value.trim(),p=$('onlPass').value;if(n.length<2){onlLoginUI(true,'שם משתמש של לפחות 2 אותיות');return}if(!/^[\u0590-\u05FFa-zA-Z0-9 _-]+$/.test(n)){onlLoginUI(true,'בשם משתמש אפשר רק אותיות, מספרים ורווח');return}if(p.length<6){onlLoginUI(true,'סיסמה של לפחות 6 תווים');return}
   onlLoginUI(true,isNew?'יוצר משתמש...':'נכנס...');const A=firebase.auth();
   try{if(isNew){const k=nameKey(n);const taken=await ONL.db.ref('usernames/'+k).once('value').catch(()=>null);if(taken&&taken.exists()){onlLoginUI(true,'השם הזה כבר תפוס, בחר שם אחר');return}
-      const c=await A.createUserWithEmailAndPassword(nameMail(n),p);await ONL.db.ref('usernames/'+k).set(c.user.uid);await ONL.db.ref('users/'+c.user.uid).set({name:n,created:Date.now()})}
+      ONL.pendingName=n;const c=await A.createUserWithEmailAndPassword(nameMail(n),p);await ONL.db.ref('usernames/'+k).set(c.user.uid);await ONL.db.ref('users/'+c.user.uid).set({name:n,created:Date.now()})}
     else await A.signInWithEmailAndPassword(nameMail(n),p)}catch(e){onlLoginUI(true,ONL_ERR[e.code]||('שגיאה: '+(e.code||e.message)))}}
 // ---- start
 async function onlInit(){if(!onlSite())return;ONL.on=true;$('start').style.pointerEvents='none';onlLoginUI(true,'מתחבר...');
   try{const V='10.12.2',B=`https://www.gstatic.com/firebasejs/${V}/`;await loadScript(B+'firebase-app-compat.js');await loadScript(B+'firebase-auth-compat.js');await loadScript(B+'firebase-database-compat.js');
     firebase.initializeApp(FB_CONFIG);ONL.db=firebase.database();await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)}catch(e){onlLoginUI(true,'לא הצלחתי להתחבר לשרת. בדוק אינטרנט ורענן את הדף');return}
   onlLoginUI(true,'');firebase.auth().onAuthStateChanged(async u=>{if(!u){ONL.user=null;onlLoginUI(true);return}ONL.user=u;
-    let name='';try{const s=await ONL.db.ref('users/'+u.uid+'/name').once('value');name=s.val()||''}catch(e){}ONL.name=name||'שחקן';G.nick=ONL.name;
-    await onlSyncSave();onlLoginUI(false);$('start').style.pointerEvents='';onlListen();onlBadgeName()})}
+    let name='';for(let i=0;i<8&&!name;i++){try{const s=await ONL.db.ref('users/'+u.uid+'/name').once('value');name=s.val()||''}catch(e){}if(!name&&ONL.pendingName){name=ONL.pendingName;break}if(!name)await new Promise(r=>setTimeout(r,500))}ONL.name=name||'שחקן';G.nick=ONL.name;
+    ONL.admin=false;try{const k=await ONL.db.ref('usernames/'+nameKey(ONL.name)).once('value');ONL.admin=nameKey(ONL.name)===nameKey(ADMIN_NAME)&&k.val()===u.uid}catch(e){}
+    await onlSyncSave();if(ONL.importData&&await onlImport(u))return;onlLoginUI(false);$('start').style.pointerEvents='';onlListen();onlBadgeName()})}
 // cloud save: the newest save (this device or the server) wins; a save from another user on this computer is not used
 async function onlSyncSave(){const u=ONL.user;try{const s=await ONL.db.ref('saves/'+u.uid).once('value');const cloud=s.val();let local=null;try{local=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')}catch(e){}
     const localMine=local&&local.owner===u.uid;if(cloud&&cloud.data&&(!localMine||(cloud.t||0)>(local.t||0))){localStorage.setItem(SAVE_KEY,cloud.data)}else if(local&&!localMine){localStorage.removeItem(SAVE_KEY)}}catch(e){}}
@@ -4958,19 +4959,40 @@ function onlRemove(f){const me=ONL.user.uid;const up={};up['friends/'+me+'/'+f]=
 function onlInvite(f){ONL.db.ref('invites/'+f+'/'+ONL.user.uid).set({name:ONL.name,t:Date.now()}).then(()=>toast(`שלחת הזמנה ל${ONL.friends[f].name}`,2000)).catch(()=>toast('לא הצלחתי לשלוח',2000))}
 function onlJump(f){const r=MP.remotes.get(f);if(!r){toast('החבר עוד לא בעיר – חכה רגע שייכנס למשחק',2500);return}if(G.inCar||G.inside||G.roof){toast('צא קודם מהרכב או מהבניין',2000);return}closePanel();const P=r.P;fade(()=>{const me=player();me.pos.set(P.x+2,.22,P.z+2);camPos.set(P.x-3,3,P.z-3)});toast(`קפצת ל${r.name}!`,2000)}
 // ---- friends screen (from the phone)
+function escH(t){return String(t==null?'':t).replace(/[&<>"'`]/g,c=>'&#'+c.charCodeAt(0)+';')}
 function onlFriendsUI(){if(!ONL.user){toast('משחק עם חברים עובד באתר של המשחק',2500);return}G.panel='friends';for(const k in keys)keys[k]=false;
   const fr=Object.entries(ONL.friends).sort((a,b)=>(ONL.status[b[0]]?1:0)-(ONL.status[a[0]]?1:0));const rq=Object.entries(ONL.reqs);
   const btn=(t,act,id,c)=>`<span data-fr="${act}" data-id="${id}" style="background:${c||'#263238'};padding:5px 10px;border-radius:8px;cursor:pointer;margin-inline-start:6px;font-size:14px">${t}</span>`;
-  xpanel(`<h2>חברים</h2><div class="sub">השם שלך: <b>${ONL.name}</b> · תן לחברים את השם הזה כדי שיוסיפו אותך</div>
+  xpanel(`<h2>חברים</h2><div class="sub">השם שלך: <b>${escH(ONL.name)}</b> · תן לחברים את השם הזה כדי שיוסיפו אותך</div>
    <div class="row"><input id="onlAdd" maxlength="16" placeholder="שם משתמש של חבר" style="flex:1;font:600 16px Heebo;padding:7px 10px;border-radius:8px;border:2px solid #3d7eff;background:#0d121c;color:#fff;direction:rtl">${btn('שלח בקשה','add','','#3d7eff')}</div>
-   ${rq.length?'<h3>בקשות חברות</h3>'+rq.map(([id,v])=>`<div class="row"><span>${v.name}</span><span>${btn('אישור','acc',id,'#2e7d32')}${btn('לא','dec',id,'#5d2525')}</span></div>`).join(''):''}
-   <h3>החברים שלי (${fr.length})</h3>${fr.length?fr.map(([id,F])=>{const on=!!ONL.status[id];return `<div class="row"><span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${on?'#66bb6a':'#757575'};margin-left:6px"></span>${F.name} <small>${on?'מחובר עכשיו':'לא מחובר'}</small></span><span>${on?btn('קפיצה אליו','jump',id,'#1565c0')+btn('הזמנה','inv',id,'#6a1b9a'):''}${btn('הסרה','rm',id)}</span></div>`}).join(''):'<div class="row"><span>עוד אין לך חברים. הוסף חבר לפי שם המשתמש שלו</span></div>'}
+   ${rq.length?'<h3>בקשות חברות</h3>'+rq.map(([id,v])=>`<div class="row"><span>${escH(v.name)}</span><span>${btn('אישור','acc',id,'#2e7d32')}${btn('לא','dec',id,'#5d2525')}</span></div>`).join(''):''}
+   <h3>החברים שלי (${fr.length})</h3>${fr.length?fr.map(([id,F])=>{const on=!!ONL.status[id];return `<div class="row"><span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${on?'#66bb6a':'#757575'};margin-left:6px"></span>${escH(F.name)} <small>${on?'מחובר עכשיו':'לא מחובר'}</small></span><span>${on?btn('קפיצה אליו','jump',id,'#1565c0')+btn('הזמנה','inv',id,'#6a1b9a'):''}${btn('הסרה','rm',id)}</span></div>`}).join(''):'<div class="row"><span>עוד אין לך חברים. הוסף חבר לפי שם המשתמש שלו</span></div>'}
+   ${ONL.admin?onlAdminHTML(btn):''}
    <div class="row"><span>${btn('יציאה מהחשבון','out','','#5d2525')}</span></div><div class="foot"><kbd>Backspace</kbd> לסגור · <kbd>K</kbd> הודעה מהירה לחברים</div>`);
   const inp=$('onlAdd');if(inp)for(const ev of ['keydown','keyup'])inp.addEventListener(ev,e=>{e.stopPropagation();if(ev==='keydown'&&e.key==='Enter')onlAddFriend(inp.value)})}
 $('xpanel').addEventListener('click',e=>{const b=e.target.closest('[data-fr]');if(!b)return;e.stopPropagation();const id=b.dataset.id,a=b.dataset.fr;
-  if(a==='add')onlAddFriend(($('onlAdd')||{}).value);else if(a==='acc')onlAccept(id);else if(a==='dec')onlDecline(id);else if(a==='inv')onlInvite(id);else if(a==='jump')onlJump(id);
+  if(a==='add')onlAddFriend(($('onlAdd')||{}).value);else if(a==='addn')onlAddFriend(b.dataset.n);else if(a==='acc')onlAccept(id);else if(a==='dec')onlDecline(id);else if(a==='inv')onlInvite(id);else if(a==='jump')onlJump(id);
   else if(a==='rm'){if(confirm(`להסיר את ${ONL.friends[id]&&ONL.friends[id].name} מהחברים?`))onlRemove(id)}else if(a==='out'){if(confirm('לצאת מהחשבון?')){saveGame(true);firebase.auth().signOut().then(()=>location.reload())}}},true);
 function onlBadgeName(){}
+// ---- the manager (admin) account and moving an old save from the Claude version into an account
+const ADMIN_NAME='ליאם איסקוב';
+function onlAdminHTML(btn){const all=ONL.allUsers;if(!all){onlLoadAll();return '<h3>מנהל – כל השחקנים</h3><div class="row"><span>טוען...</span></div>'}
+  const list=Object.entries(all).filter(([id])=>id!==ONL.user.uid).sort((a,b)=>(ONL.allStatus[b[0]]?1:0)-(ONL.allStatus[a[0]]?1:0));const on=list.filter(([id])=>ONL.allStatus[id]).length;
+  return `<h3>מנהל – כל השחקנים (${list.length}, מחוברים עכשיו: ${on})</h3>`+(list.length?list.map(([id,v])=>{const o=!!ONL.allStatus[id];return `<div class="row"><span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${o?'#66bb6a':'#757575'};margin-left:6px"></span>${escH(v.name)}</span><span>${ONL.friends[id]?'<small>חבר</small>':`<span data-fr="addn" data-n="${escH(v.name)}" style="background:#3d7eff;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:14px">בקשת חברות</span>`}</span></div>`}).join(''):'<div class="row"><span>עוד אין שחקנים אחרים</span></div>')}
+function onlLoadAll(){if(ONL.allSub)return;ONL.allSub=1;ONL.allStatus={};ONL.db.ref('users').on('value',s=>{ONL.allUsers=s.val()||{};if(G.panel==='friends')onlFriendsUI()});ONL.db.ref('status').on('value',s=>{ONL.allStatus=s.val()||{};if(G.panel==='friends')onlFriendsUI()})}
+function b64uDec(t){t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';const b=atob(t);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function b64uEnc(u){let b='';for(let i=0;i<u.length;i+=8192)b+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function gzipStr(t,un){const cs=un?new DecompressionStream('gzip'):new CompressionStream('gzip');const st=new Blob([t]).stream().pipeThrough(cs);return new Uint8Array(await new Response(st).arrayBuffer())}
+if(onlSite()){const m=/[#&]import=([A-Za-z0-9_-]+)/.exec(location.hash);if(m){ONL.importRaw=m[1];ONL.importData=true;try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}}
+async function onlImport(u){try{const bytes=await gzipStr(b64uDec(ONL.importRaw),true);const d=JSON.parse(new TextDecoder().decode(bytes));if(!d||typeof d!=='object'||d.money==null)throw 0;
+    if(!confirm(`נמצאה שמירה ישנה (₪${(d.money||0).toLocaleString('he-IL')}). להכניס אותה לחשבון "${ONL.name}"? ההתקדמות הנוכחית בחשבון הזה תוחלף`)){ONL.importData=false;return false}
+    d.owner=u.uid;d.t=Date.now();const js=JSON.stringify(d);localStorage.setItem(SAVE_KEY,js);await ONL.db.ref('saves/'+u.uid).set({t:d.t,data:js});onlLoginUI(true,'השמירה הועברה! טוען את המשחק...');setTimeout(()=>location.reload(),900);return true}
+  catch(e){ONL.importData=false;toast('לא הצלחתי לקרוא את השמירה הישנה',3000);return false}}
+// inside Claude: send this device's save to the website
+async function exportSaveToSite(){let raw=null;try{raw=localStorage.getItem(SAVE_KEY)}catch(e){}if(!raw){if(G.started)saveGame(true);try{raw=localStorage.getItem(SAVE_KEY)}catch(e){}}
+  if(!raw)return 'אין שמירה במכשיר הזה';try{const url='https://lmlisakov95-bot.github.io/liam-world/#import='+b64uEnc(await gzipStr(raw));const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();return 'נפתח האתר – היכנס לחשבון והשמירה תעבור'}catch(e){return 'לא הצלחתי להעביר'}}
+if(!onlSite())CONTACTS.unshift(['העברת השמירה לאתר של המשחק',()=>{saveGame(true);exportSaveToSite().then(t=>toast(t,4000));return 'מעביר...'}]);
+
 CONTACTS.unshift(['חברים – להוסיף, להזמין, לראות מי מחובר',()=>{setTimeout(onlFriendsUI,60);return 'פותח...'}]);
 onlInit();
 </script>
